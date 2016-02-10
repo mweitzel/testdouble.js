@@ -1,7 +1,8 @@
 describe '.verify', ->
   Given -> @verify = requireSubject('lib/verify')
-  Given -> @create = requireSubject('lib/create')
-  Given -> @testDouble = @create()
+  Given -> @function = requireSubject('lib/function')
+  Given -> @object = requireSubject('lib/object')
+  Given -> @testDouble = @function()
 
   context 'a satisfied verification', ->
     When -> @testDouble("dogs", "cats")
@@ -29,8 +30,20 @@ describe '.verify', ->
           - called with `("the wrong WOAH")`.
       """
 
+  context 'unsatisfied verify - wrong arg count', ->
+    When -> @testDouble("good", "bad")
+    Then -> shouldThrow (=> @verify(@testDouble("good"))), """
+      Unsatisfied verification on test double.
+
+        Wanted:
+          - called with `("good")`.
+
+        But was actually called:
+          - called with `("good", "bad")`.
+      """
+
   context 'with a named double', ->
-    Given -> @testDouble = @create("#footime")
+    Given -> @testDouble = @function("#footime")
     When -> @result = (shouldThrow => @verify(@testDouble()))
     Then -> expect(@result).to.contain("verification on test double `#footime`.")
 
@@ -39,21 +52,21 @@ describe '.verify', ->
     Given -> @SomeType::bar = ->
     Given -> @SomeType::baz = ->
     Given -> @SomeType::biz = "not a function!"
-    Given -> @testDoubleObj = @create(@SomeType)
+    Given -> @testDoubleObj = @object(@SomeType)
     When -> @result = (shouldThrow => @verify(@testDoubleObj.baz()))
     Then -> expect(@result).to.contain("verification on test double `Foo#baz`.")
     Then -> @testDoubleObj.biz == "not a function!"
 
   context 'with a test double *as an arg* to another', ->
-    Given -> @testDouble = @create()
+    Given -> @testDouble = @function()
     When -> @result = (shouldThrow => @verify(@testDouble(@someTestDoubleArg)))
 
     context 'with an unnamed double _as an arg_', ->
-      Given -> @someTestDoubleArg = @create()
+      Given -> @someTestDoubleArg = @function()
       Then -> expect(@result).to.contain("- called with `([test double (unnamed)])`.")
 
     context 'with a named double _as an arg_', ->
-      Given -> @someTestDoubleArg = @create("#foo")
+      Given -> @someTestDoubleArg = @function("#foo")
       Then -> expect(@result).to.contain("- called with `([test double for \"#foo\"])`.")
 
   context 'a double-free verification error', ->
@@ -73,4 +86,71 @@ describe '.verify', ->
 
     context 'unsatisfied', ->
       Then -> shouldThrow(=> @verify(@testDouble(@matchers.isA(String))))
+
+  describe 'configuration', ->
+
+    describe 'ignoring extra arguments (more thoroughly tested via when())', ->
+      When -> @testDouble('matters', 'not')
+      Then -> shouldNotThrow(=> @verify(@testDouble('matters'), ignoreExtraArgs: true))
+
+    describe 'number of times an invocation is satisfied', ->
+      context '0 times, satisfied', ->
+        Then -> shouldNotThrow(=> @verify(@testDouble(), times: 0))
+
+      context '0 times, unsatisfied', ->
+        When -> @testDouble()
+        Then -> shouldThrow (=> @verify(@testDouble(), times: 0)), """
+          Unsatisfied verification on test double.
+
+            Wanted:
+              - called with `()` 0 times.
+
+            But was actually called:
+              - called with `()`.
+          """
+
+      context '1 time, satisfied', ->
+        When -> @testDouble()
+        Then -> shouldNotThrow(=> @verify(@testDouble(), times: 1))
+
+      context '1 time, unsatisfied (with 2)', ->
+        When -> @testDouble()
+        And -> @testDouble()
+        Then -> shouldThrow (=> @verify(@testDouble(), times: 1)), """
+          Unsatisfied verification on test double.
+
+            Wanted:
+              - called with `()` 1 time.
+
+            But was actually called:
+              - called with `()`.
+              - called with `()`.
+          """
+
+      context '4 times, satisfied', ->
+        When -> @testDouble()
+        And -> @testDouble()
+        And -> @testDouble()
+        And -> @testDouble()
+        Then -> shouldNotThrow(=> @verify(@testDouble(), times: 4))
+
+      context '4 times, unsatisfied (with 3)', ->
+        When -> @testDouble()
+        And -> @testDouble()
+        And -> @testDouble()
+        Then -> shouldThrow (=> @verify(@testDouble(), times: 4)), """
+          Unsatisfied verification on test double.
+
+            Wanted:
+              - called with `()` 4 times.
+
+            But was actually called:
+              - called with `()`.
+              - called with `()`.
+              - called with `()`.
+          """
+
+
+
+
 
